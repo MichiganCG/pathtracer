@@ -3,6 +3,7 @@
 
 pathtracer
 pathtracer_debug
+*.png
 
 Makefile
 
