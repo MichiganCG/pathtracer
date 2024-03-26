@@ -1,59 +1,65 @@
 #include "library.hpp"
 
-constexpr uint32_t ImageWidth = 1920 / 4;
-constexpr uint32_t ImageHeight = 1080 / 4;
-constexpr uint32_t SamplesPerPixel = 16;
+#include <vector>
 
-bool intersect(const Ray& ray, Vec3& normal, float& distance)
+constexpr uint32_t ImageWidth = 1920 / 2;
+constexpr uint32_t ImageHeight = 1080 / 2;
+constexpr uint32_t SamplesPerPixel = 64;
+
+Scene make_scene()
 {
-	static const std::vector<Sphere> Scene =
-		{
-			Sphere({ 0.0f, 1.0f, 3.0f }, 1.0f),
-			Sphere({ -2.0f, 1.0f, 3.0f }, 1.0f),
-			Sphere({ 0.0f, 3.0f, 3.0f }, 1.0f),
-			Sphere({ 0.0f, -100.0f, 0.0f }, 100.0f)
-		};
+	Scene scene;
 
-	distance = std::numeric_limits<float>::infinity();
+	scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f);
+	scene.insert_sphere({ -2.0f, 1.0f, 3.0f }, 1.0f);
+	scene.insert_sphere({ 0.0f, 3.0f, 3.0f }, 1.0f);
+	scene.insert_plane({ 0.0f, 1.0f, 0.0f }, 0.0f);
 
-	for (const Sphere& sphere : Scene)
-	{
-		Vec3 new_normal;
-		float new_distance;
-		if (not intersect_sphere(ray, sphere, new_normal, new_distance)) continue;
-		if (new_distance >= distance) continue;
-
-		normal = new_normal;
-		distance = new_distance;
-	}
-
-	return std::isfinite(distance);
+	return scene;
 }
 
-Color bsdf(Vec3 outgoing, Vec3 normal, Vec3& incident)
+const Scene Scene = make_scene();
+
+Color escaped(Vec3 direction)
+{
+	return direction * direction;
+}
+
+Color bsdf_diffuse(Vec3 outgoing, Vec3 normal, Vec3& incident)
 {
 	incident = random_on_sphere();
 	if (dot(incident, normal) < 0.0f) incident = incident * -1.0f;
 	return Color(0.8f);
 }
 
+Color bsdf(uint32_t material, Vec3 outgoing, Vec3 normal, Vec3& incident)
+{
+	switch (material)
+	{
+		case 0: return bsdf_diffuse(outgoing, normal, incident);
+		default: break;
+	}
+
+	return Color(0.0f);
+}
+
 Color evaluate(const Ray& ray)
 {
-	Vec3 normal;
 	float distance;
-	if (not intersect(ray, normal, distance)) return ray.direction * ray.direction;
+	Vec3 normal;
+	uint32_t material;
 
-	Vec3 point = ray.origin + ray.direction * distance;
+	if (not Scene.intersect(ray, distance, normal, material)) return escaped(ray.direction);
+
 	Vec3 outgoing = ray.direction;
 	Vec3 incident;
 
-	Color scatter = bsdf(outgoing, normal, incident);
-	float lambertian = std::abs(dot(normal, incident));
+	Color scatter = bsdf(material, outgoing, normal, incident);
+	Ray new_ray = bounce(ray, distance, incident);
 
-	Ray new_ray;
-	new_ray.origin = point + incident * 0.0001f;
-	new_ray.direction = normalize(incident);
-	return evaluate(new_ray) * scatter * lambertian;
+	scatter = scatter * std::abs(dot(normal, incident));
+	if (get_luminance(scatter) < 0.01f) return Color(0.0f);
+	return evaluate(new_ray) * scatter;
 }
 
 Color render_sample(float u, float v)
@@ -70,8 +76,8 @@ Color render_pixel(uint32_t x, uint32_t y)
 
 	for (uint32_t i = 0; i < SamplesPerPixel; ++i)
 	{
-		float u = (static_cast<float>(x) + random_float() - static_cast<float>(ImageWidth) / 2.0f) / ImageWidth;
-		float v = (static_cast<float>(y) + random_float() - static_cast<float>(ImageHeight) / 2.0f) / ImageWidth;
+		float u = (static_cast<float>(x) + random_float() - ImageWidth / 2.0f) / ImageWidth;
+		float v = (static_cast<float>(y) + random_float() - ImageHeight / 2.0f) / ImageWidth;
 		result = result + render_sample(u, v);
 	}
 
@@ -80,16 +86,17 @@ Color render_pixel(uint32_t x, uint32_t y)
 
 int main()
 {
-	std::vector<Color> colors;
+	std::vector<Color> colors(ImageWidth * ImageHeight);
 
-	for (uint32_t y = 0; y < ImageHeight; ++y)
+	parallel_for(0, ImageHeight, [&](uint32_t y)
 	{
 		for (uint32_t x = 0; x < ImageWidth; ++x)
 		{
 			Color color = render_pixel(x, y);
-			colors.push_back(color);
+			size_t index = y * ImageWidth + x;
+			colors[index] = color;
 		}
-	}
+	});
 
 	write_image("output.png", ImageWidth, ImageHeight, colors.data());
 	return 0;

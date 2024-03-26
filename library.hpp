@@ -2,12 +2,10 @@
 
 #include "stb_image_write.h"
 
-#include <stdexcept>
 #include <cstdint>
 #include <string>
-#include <vector>
-#include <random>
 #include <cmath>
+#include <functional>
 
 using Float = float;
 
@@ -27,12 +25,31 @@ struct Ray
 	Vec3 origin, direction;
 };
 
-struct Sphere
+class Scene
 {
-	Sphere(Vec3 center, Float radius) : center(center), radius(radius) {}
+public:
+	Scene() = default;
 
-	Vec3 center;
-	Float radius;
+	void insert_sphere(Vec3 center, Float radius, uint32_t material = 0)
+	{
+		spheres.emplace_back(center, radius, material);
+	}
+
+	void insert_plane(Vec3 normal, Float offset, uint32_t material = 0)
+	{
+		planes.emplace_back(normal, offset, material);
+	}
+
+	/**
+	 * Finds whether a ray intersects with a scene.
+	 * @return Whether the intersection occurred.
+	 * If intersected, also outputs the travelled distance, and surface normal and material.
+	 */
+	bool intersect(const Ray& ray, Float& distance, Vec3& normal, uint32_t& material) const;
+
+private:
+	std::vector<std::tuple<Vec3, Float, uint32_t>> spheres;
+	std::vector<std::tuple<Vec3, Float, uint32_t>> planes;
 };
 
 using Color = Vec3;
@@ -52,12 +69,7 @@ inline Vec3 normalize(Vec3 value) { return value * (Float(1.0) / magnitude(value
 /**
  * @return A random floating point value between 0 (inclusive) and 1 (exclusive).
  */
-inline Float random_float()
-{
-	static std::default_random_engine random(42);
-	std::uniform_real_distribution<Float> distribution;
-	return distribution(random);
-}
+Float random_float();
 
 /**
  * @return A random point in the volume of a unit sphere.
@@ -84,56 +96,34 @@ inline Vec3 random_in_sphere()
 inline Vec3 random_on_sphere() { return normalize(random_in_sphere()); }
 
 /**
- * Finds whether a ray intersects with a sphere.
- * Also outputs the intersection distance and surface normal if an intersection occurred.
- * @return Whether the intersection occurred.
+ * Bounces an old ray to form a new ray.
+ * @param ray The old ray.
+ * @param distance Distance on the old ray to start the new ray.
+ * @param direction The direction of the new ray.
  */
-inline bool intersect_sphere(const Ray& ray, const Sphere& sphere, Vec3& normal, Float& distance)
+inline Ray bounce(const Ray& ray, Float distance, Vec3 direction)
 {
-	Vec3 offset = ray.origin - sphere.center;
-	Float radius2 = sphere.radius * sphere.radius;
-	Float center = -dot(offset, ray.direction);
-
-	Float extend2 = center * center + radius2 - magnitude_squared(offset);
-	if (extend2 < Float(0.0)) return false;
-
-	Float extend = std::sqrt(extend2);
-	distance = center - extend;
-	if (distance < Float(0.0)) distance = center + extend;
-	if (distance < Float(0.0)) return false;
-
-	normal = normalize(ray.direction * distance + offset);
-	return true;
+	Vec3 point = ray.origin + ray.direction * distance;
+	direction = normalize(direction);
+	point = point + direction * 1E-4f; //Avoids shadow acne problem
+	return { point, direction };
 }
+
+/**
+ * Returns the luminance value of a color.
+ * This can be thought of as the visually perceived brightness.
+ */
+inline Float get_luminance(Color color) { return dot(color, { 0.212671f, 0.715160f, 0.072169f }); }
+
+/**
+ * Executes an action in parallel, taking advantage of multiple threads.
+ * @param begin The first index to execute (inclusive).
+ * @param end One past the last index to execute (exclusive).
+ * @param action The action to execute in parallel.
+ */
+void parallel_for(uint32_t begin, uint32_t end, const std::function<void(uint32_t)>& action);
 
 /**
  * Outputs a series of colors as a PNG image file.
  */
-inline void write_image(const std::string& filename, uint32_t width, uint32_t height, const Color* colors)
-{
-	std::vector<uint8_t> data;
-	data.reserve(width * height * 3);
-
-	auto convert_single = [](float value)
-	{
-		//Gamma correction and clamp
-		float corrected = std::sqrt(std::max(Float(0.0), std::min(value, Float(1.0))));
-		return static_cast<uint8_t>(corrected * std::numeric_limits<uint8_t>::max());
-	};
-
-	for (uint32_t y = 0; y < height; ++y)
-	{
-		for (uint32_t x = 0; x < width; ++x)
-		{
-			auto& color = colors[(height - y - 1) * width + x];
-			data.push_back(convert_single(color.x));
-			data.push_back(convert_single(color.y));
-			data.push_back(convert_single(color.z));
-		}
-	}
-
-	auto casted_width = static_cast<int>(width);
-	auto casted_height = static_cast<int>(height);
-	int result = stbi_write_png(filename.c_str(), casted_width, casted_height, 3, data.data(), 0);
-	if (result == 0) throw std::runtime_error("Error in when outputting image.");
-}
+void write_image(const std::string& filename, uint32_t width, uint32_t height, const Color* colors);
