@@ -21,54 +21,90 @@ static Random* make_random_engine(uint32_t seed)
 	return result;
 }
 
-Float random_float()
+float random_float()
 {
 	Random* random = thread_random.get();
 	if (random == nullptr) random = make_random_engine(0);
-	std::uniform_real_distribution<Float> distribution;
+	std::uniform_real_distribution<float> distribution;
 	return distribution(*random);
 }
 
-static float intersect_sphere(const Ray& ray, Vec3 center, Float radius, Vec3& normal)
+void Scene::insert_box(Vec3 center, Vec3 size, uint32_t material)
+{
+	Vec3 extend = size / 2.0f;
+	boxes.emplace_back(center - extend, center + extend, material);
+}
+
+static constexpr float Infinity = std::numeric_limits<float>::infinity();
+
+static float intersect_sphere(const Ray& ray, Vec3 center, float radius, Vec3& normal)
 {
 	Vec3 offset = ray.origin - center;
-	Float radius2 = radius * radius;
-	Float mapped = -dot(offset, ray.direction);
+	float radius2 = radius * radius;
+	float mapped = -dot(offset, ray.direction);
 
-	Float extend2 = mapped * mapped + radius2 - magnitude_squared(offset);
-	if (extend2 < Float(0.0)) return std::numeric_limits<Float>::infinity();
+	float extend2 = mapped * mapped + radius2 - magnitude_squared(offset);
+	if (extend2 < 0.0f) return Infinity;
 
-	Float extend = std::sqrt(extend2);
-	Float distance = mapped - extend;
-	if (distance < Float(0.0)) distance = mapped + extend;
-	if (distance < Float(0.0)) return std::numeric_limits<Float>::infinity();
+	float extend = std::sqrt(extend2);
+	float distance = mapped - extend;
+	if (distance < 0.0f) distance = mapped + extend;
+	if (distance < 0.0f) return Infinity;
 
 	normal = normalize(ray.direction * distance + offset);
 	return distance;
 }
 
-static float intersect_plane(const Ray& ray, Vec3 normal, Float offset)
+static float intersect_plane(const Ray& ray, Vec3 normal, float offset)
 {
-	Float mapped = dot(ray.direction, normal);
+	float mapped = dot(ray.direction, normal);
 
-	if (std::abs(mapped) > 1E-4f)
+	if (not almost_zero(mapped))
 	{
-		Float distance = dot(ray.origin, normal);
+		float distance = dot(ray.origin, normal);
 		distance = (distance + offset) / -mapped;
-		if (distance >= Float(0.0f)) return distance;
+		if (distance >= 0.0f) return distance;
 	}
 
-	return std::numeric_limits<Float>::infinity();
+	return Infinity;
 }
 
-bool Scene::intersect(const Ray& ray, Float& distance, Vec3& normal, uint32_t& material) const
+static float intersect_box(const Ray& ray, Vec3 min, Vec3 max, Vec3& normal)
 {
-	distance = std::numeric_limits<float>::infinity();
+	Vec3 direction_r = Vec3(1.0f) / ray.direction;
+	Vec3 lengths0 = (min - ray.origin) * direction_r;
+	Vec3 lengths1 = (max - ray.origin) * direction_r;
+
+	Vec3 lengths_min(std::max(lengths0.x, lengths1.x), std::max(lengths0.y, lengths1.y), std::max(lengths0.z, lengths1.z));
+	Vec3 lengths_max(std::min(lengths0.x, lengths1.x), std::min(lengths0.y, lengths1.y), std::min(lengths0.z, lengths1.z));
+
+	float near = lengths_max.x;
+	normal = Vec3(-std::copysign(1.0f, ray.direction.x), 0.0f, 0.0f);
+
+	if (near < lengths_max.y)
+	{
+		near = lengths_max.y;
+		normal = Vec3(0.0f, -std::copysign(1.0f, ray.direction.y), 0.0f);
+	}
+
+	if (near < lengths_max.z)
+	{
+		near = lengths_max.z;
+		normal = Vec3(0.0f, 0.0f, -std::copysign(1.0f, ray.direction.z));
+	}
+
+	float far = std::min(lengths_min.x, std::min(lengths_min.y, lengths_min.z));
+	return (far >= near) && (far >= 0.0f) ? near : Infinity;
+}
+
+bool Scene::intersect(const Ray& ray, float& distance, Vec3& normal, uint32_t& material) const
+{
+	distance = Infinity;
 
 	for (auto& sphere : spheres)
 	{
 		Vec3 center = std::get<0>(sphere);
-		Float radius = std::get<1>(sphere);
+		float radius = std::get<1>(sphere);
 
 		Vec3 new_normal;
 		float new_distance = intersect_sphere(ray, center, radius, new_normal);
@@ -84,7 +120,7 @@ bool Scene::intersect(const Ray& ray, Float& distance, Vec3& normal, uint32_t& m
 	for (auto& plane : planes)
 	{
 		Vec3 new_normal = std::get<0>(plane);
-		Float offset = std::get<1>(plane);
+		float offset = std::get<1>(plane);
 		float new_distance = intersect_plane(ray, new_normal, offset);
 
 		if (new_distance < distance)
@@ -92,6 +128,22 @@ bool Scene::intersect(const Ray& ray, Float& distance, Vec3& normal, uint32_t& m
 			distance = new_distance;
 			normal = new_normal;
 			material = std::get<2>(plane);
+		}
+	}
+
+	for (auto& box : boxes)
+	{
+		Vec3 min = std::get<0>(box);
+		Vec3 max = std::get<1>(box);
+
+		Vec3 new_normal;
+		float new_distance = intersect_box(ray, min, max, new_normal);
+
+		if (new_distance < distance)
+		{
+			distance = new_distance;
+			normal = new_normal;
+			material = std::get<2>(box);
 		}
 	}
 
@@ -137,7 +189,7 @@ void write_image(const std::string& filename, uint32_t width, uint32_t height, c
 	auto convert_single = [](float value)
 	{
 		//Gamma correction and clamp
-		float corrected = std::sqrt(std::max(Float(0.0), std::min(value, Float(1.0))));
+		float corrected = std::sqrt(std::max(0.0f, std::min(value, 1.0f)));
 		return static_cast<uint8_t>(corrected * std::numeric_limits<uint8_t>::max());
 	};
 
