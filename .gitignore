@@ -5,8 +5,6 @@ pathtracer
 pathtracer_debug
 *.png
 
-Makefile
-
 .vscode/
 
 testy.cpp

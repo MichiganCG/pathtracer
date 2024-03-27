@@ -10,13 +10,13 @@ Scene make_scene()
 {
 	Scene scene;
 
-	//		scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f);
-	//		scene.insert_sphere({ -2.0f, 1.0f, 3.0f }, 1.0f, 2);
-	//		scene.insert_sphere({ 0.0f, 3.0f, 3.0f }, 1.0f, 3);
-	//		scene.insert_plane({ 0.0f, 1.0f, 0.0f }, 0.0f);
-	//		scene.insert_box({ 2.0f, 1.0f, 3.0f }, Vec3(2.0f), 1);
+	scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f);
+	scene.insert_sphere({ -2.0f, 1.0f, 3.0f }, 1.0f, 1);
+	scene.insert_sphere({ 0.0f, 3.0f, 3.0f }, 0.3f, 3);
+	scene.insert_plane({ 0.0f, 1.0f, 0.0f }, 0.0f);
+	scene.insert_box({ 2.0f, 1.0f, 3.0f }, Vec3(2.0f), 1);
 
-	scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f, 0);
+	//	scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f, 2);
 
 	return scene;
 }
@@ -25,17 +25,26 @@ const Scene Scene = make_scene();
 
 Color bsdf_lambertian_reflection(Vec3 outgoing, Vec3 normal, Vec3& incident)
 {
-	incident = random_on_sphere();
+	//Uniform sampling
+	//	incident = random_on_sphere();
+	//	float uniform_hemisphere_pdf = 1.0f / Pi / 2.0f;
+
+	//Importance sample based on cosine distribution
+	incident = normal + random_on_sphere();
+	float cosine_hemisphere_pdf = abs_dot(incident, normal) / Pi;
+
 	make_same_side(outgoing, normal, incident);
-	return Color(1.0f);
+	float evaluated = 1.0f / Pi;
+	float pdf = cosine_hemisphere_pdf;
+	return Color(evaluated / pdf);
 }
 
 Color bsdf_specular_reflection(Vec3 outgoing, Vec3 normal, Vec3& incident)
 {
 	incident = reflect(outgoing, normal);
-	float adjustment = abs_dot(incident, normal);
-	if (almost_zero(adjustment)) return Color(0.0f);
-	return Color(1.0f / adjustment);
+	float correction = abs_dot(incident, normal);
+	if (almost_zero(correction)) return Color(0.0f);
+	return Color(1.0f / correction);
 }
 
 Color bsdf_specular_transmission(Vec3 outgoing, Vec3 normal, Vec3& incident, float eta)
@@ -62,7 +71,7 @@ Color bsdf(uint32_t material, Vec3 outgoing, Vec3 normal, Vec3& incident)
 {
 	switch (material)
 	{
-		case 0: return bsdf_lambertian_reflection(outgoing, normal, incident);
+		case 0: return bsdf_lambertian_reflection(outgoing, normal, incident) * 0.5f;
 		case 1: return bsdf_specular_reflection(outgoing, normal, incident) * 0.8f;
 		case 2: return bsdf_specular_fresnel(outgoing, normal, incident, 1.0f / 1.5f);
 		default: break;
@@ -84,7 +93,7 @@ Color emit(uint32_t material)
 
 Color escape(Vec3 direction)
 {
-	return Color(1.0f);
+	//	return Color(1.0f);
 	return direction * direction;
 }
 
@@ -102,7 +111,7 @@ Color evaluate(const Ray& ray, Vec3 energy)
 	Color scatter = bsdf(material, outgoing, normal, incident);
 	Color emission = emit(material);
 
-	energy = energy * scatter;// * abs_dot(normal, incident);
+	energy = energy * scatter * abs_dot(normal, incident);
 	if (get_luminance(energy) < 0.001f) return emission;
 	Ray new_ray = bounce(ray, distance, incident);
 	return evaluate(new_ray, energy) + emission;
@@ -130,7 +139,7 @@ Color render_pixel(uint32_t x, uint32_t y)
 	return result / SamplesPerPixel;
 }
 
-int _main()
+int main_()
 {
 	std::vector<Color> colors(ImageWidth * ImageHeight);
 
@@ -141,7 +150,11 @@ int _main()
 			Color color = render_pixel(x, y);
 			size_t index = y * ImageWidth + x;
 
-			if (color.x > 1.0f || color.y > 1.0f || color.z > 1.0f) color = Color(1.0f, 0.0f, 1.0f);
+			//			if (get_luminance(color) > 1.01f)
+			//			{
+			//				color = color - Vec3(1.0f);
+			//				if (get_luminance(color) > 1.01f) color = Vec3(1.0f, 0.0f, 1.0f);
+			//			}
 
 			colors[index] = color;
 		}

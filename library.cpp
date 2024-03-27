@@ -35,8 +35,6 @@ void Scene::insert_box(Vec3 center, Vec3 size, uint32_t material)
 	boxes.emplace_back(center - extend, center + extend, material);
 }
 
-static constexpr float Infinity = std::numeric_limits<float>::infinity();
-
 static float intersect_sphere(const Ray& ray, Vec3 center, float radius, Vec3& normal)
 {
 	Vec3 offset = ray.origin - center;

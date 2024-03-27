@@ -2,10 +2,14 @@
 
 #include "stb_image_write.h"
 
-#include <cstdint>
-#include <string>
 #include <cmath>
+#include <string>
+#include <numbers>
+#include <cstdint>
 #include <functional>
+
+constexpr float Infinity = std::numeric_limits<float>::infinity();
+constexpr float Pi = std::numbers::pi_v<float>;
 
 struct Vec3
 {
@@ -140,10 +144,7 @@ inline void make_same_side(Vec3 outgoing, Vec3 normal, Vec3& incident)
 	float dot_i = dot(incident, normal);
 
 	//Flip the vector to be on the same side as normal
-	if (dot_o * dot_i < 0.0f)
-	{
-		incident = reflect(-incident, normal);
-	}
+	if (dot_o * dot_i < 0.0f) incident = reflect(-incident, normal);
 }
 
 /**
@@ -151,6 +152,19 @@ inline void make_same_side(Vec3 outgoing, Vec3 normal, Vec3& incident)
  * This can be thought of as the visually perceived brightness.
  */
 inline float get_luminance(Color color) { return dot(color, { 0.212671f, 0.715160f, 0.072169f }); }
+
+/**
+ * Executes an action in parallel, taking advantage of multiple threads.
+ * @param begin The first index to execute (inclusive).
+ * @param end One past the last index to execute (exclusive).
+ * @param action The action to execute in parallel.
+ */
+void parallel_for(uint32_t begin, uint32_t end, const std::function<void(uint32_t)>& action);
+
+/**
+ * Outputs a series of colors as a PNG image file.
+ */
+void write_image(const std::string& filename, uint32_t width, uint32_t height, const Color* colors);
 
 inline float fresnel_cos_i(float cos_o, float eta)
 {
@@ -185,16 +199,3 @@ inline float fresnel_value(float eta, float cos_o, float cos_i)
 	float perp = (perp0 - perp1) / (perp0 + perp1);
 	return (para * para + perp * perp) / 2.0f;
 }
-
-/**
- * Executes an action in parallel, taking advantage of multiple threads.
- * @param begin The first index to execute (inclusive).
- * @param end One past the last index to execute (exclusive).
- * @param action The action to execute in parallel.
- */
-void parallel_for(uint32_t begin, uint32_t end, const std::function<void(uint32_t)>& action);
-
-/**
- * Outputs a series of colors as a PNG image file.
- */
-void write_image(const std::string& filename, uint32_t width, uint32_t height, const Color* colors);
