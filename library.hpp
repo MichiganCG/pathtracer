@@ -60,12 +60,14 @@ inline Vec3 operator*(Vec3 value, Vec3 other) { return { value.x * other.x, valu
 inline Vec3 operator/(Vec3 value, Vec3 other) { return { value.x / other.x, value.y / other.y, value.z / other.z }; }
 inline Vec3 operator*(Vec3 value, Float other) { return { value.x * other, value.y * other, value.z * other }; }
 inline Vec3 operator/(Vec3 value, Float other) { return { value.x / other, value.y / other, value.z / other }; }
+inline Vec3 operator+(Vec3 value) { return { +value.x, +value.y, +value.z }; }
+inline Vec3 operator-(Vec3 value) { return { -value.x, -value.y, -value.z }; }
 
 inline Float dot(Vec3 value, Vec3 other) { return value.x * other.x + value.y * other.y + value.z * other.z; }
 inline Float magnitude_squared(Vec3 value) { return dot(value, value); }
 inline Float magnitude(Vec3 value) { return std::sqrt(magnitude_squared(value)); }
 inline Vec3 normalize(Vec3 value) { return value * (Float(1.0) / magnitude(value)); }
-
+inline Vec3 reflect(Vec3 value, Vec3 normal) { return normal * (2.0f * dot(value, normal)) - value; }
 /**
  * @return A random floating point value between 0 (inclusive) and 1 (exclusive).
  */
@@ -104,9 +106,24 @@ inline Vec3 random_on_sphere() { return normalize(random_in_sphere()); }
 inline Ray bounce(const Ray& ray, Float distance, Vec3 direction)
 {
 	Vec3 point = ray.origin + ray.direction * distance;
-	direction = normalize(direction);
 	point = point + direction * 1E-4f; //Avoids shadow acne problem
 	return { point, direction };
+}
+
+/**
+ * Flips incident to be on the same side of a surface as outgoing.
+ * @param normal The normal vector that describes the surface.
+ */
+inline void make_same_side(Vec3 outgoing, Vec3 normal, Vec3& incident)
+{
+	Float dot_o = dot(outgoing, normal);
+	Float dot_i = dot(incident, normal);
+
+	//Flip the vector to be on the same side as normal
+	if (dot_o * dot_i < 0.0f)
+	{
+		incident = reflect(-incident, normal);
+	}
 }
 
 /**
