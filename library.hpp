@@ -3,7 +3,9 @@
 #include "stb_image_write.h"
 
 #include <cmath>
+#include <tuple>
 #include <string>
+#include <vector>
 #include <numbers>
 #include <cstdint>
 #include <functional>
