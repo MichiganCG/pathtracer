@@ -142,7 +142,7 @@ Color render_pixel(uint32_t x, uint32_t y)
 	return result / SamplesPerPixel;
 }
 
-int main_()
+int main()
 {
 	std::vector<Color> colors(ImageWidth * ImageHeight);
 
