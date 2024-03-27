@@ -1,3 +1,6 @@
+//#define COMPILE_REFERENCE
+#ifdef COMPILE_REFERENCE
+
 #include "library.hpp"
 
 #include <vector>
@@ -163,3 +166,5 @@ int main_()
 	write_image("output.png", ImageWidth, ImageHeight, colors.data());
 	return 0;
 }
+
+#endif
