@@ -156,6 +156,58 @@ inline void make_same_side(Vec3 outgoing, Vec3 normal, Vec3& incident)
 }
 
 /**
+ * Returns the cosine phi value of the incident direction for a fresnel surface.
+ * @param eta The index of refraction of the fresnel.
+ * @param cos_o The outgoing direction's cosine phi value.
+ */
+inline float fresnel_cos_i(float eta, float cos_o)
+{
+	float sin_o2 = 1.0f - cos_o * cos_o;
+	float sin_i2 = eta * eta * sin_o2;
+	if (sin_i2 >= 1.0f) return 0.0f; //Total internal reflection
+
+	float cos_i = safe_sqrt(1.0f - sin_i2);
+	return cos_o > 0.0f ? -cos_i : cos_i;
+}
+
+/**
+ * Returns the fresnel value of a fresnel surface.
+ * @param eta The index of refraction of the fresnel.
+ * @param cos_o The outgoing direction's cosine phi value.
+ * @param cos_i The incident direction's cosine phi value.
+ */
+inline float fresnel_value(float eta, float cos_o, float cos_i)
+{
+	if (almost_zero(cos_i)) return 1.0f; //Total internal reflection
+
+	cos_o = std::abs(cos_o);
+	cos_i = std::abs(cos_i);
+
+	float eta_r = eta;
+	float para0 = cos_o * eta_r;
+	float para1 = cos_i;
+	float perp0 = cos_o;
+	float perp1 = cos_i * eta_r;
+
+	float para = (para0 - para1) / (para0 + para1);
+	float perp = (perp0 - perp1) / (perp0 + perp1);
+	return (para * para + perp * perp) / 2.0f;
+}
+
+/**
+ * Returns the refracted incident direction given a fresnel surface and the outgoing direction.
+ * @param eta The index of refraction of the fresnel.
+ * @param cos_i The incident direction's cosine phi value.
+ * @param outgoing The outgoing direction.
+ * @param normal The normal of the surface.
+ */
+inline Vec3 fresnel_refract(float eta, float cos_i, Vec3 outgoing, Vec3 normal)
+{
+	float cos_o = dot(outgoing, normal);
+	return normalize(normal * (eta * cos_o + cos_i) - outgoing * eta);
+}
+
+/**
  * Returns the luminance value of a color.
  * This can be thought of as the visually perceived brightness.
  */
@@ -178,37 +230,3 @@ void parallel_for(uint32_t begin, uint32_t end, const std::function<void(uint32_
  * Outputs a series of colors as a PNG image file.
  */
 void write_image(const std::string& filename, uint32_t width, uint32_t height, const Color* colors);
-
-inline float fresnel_cos_i(float eta, float cos_o)
-{
-	float sin_o2 = 1.0f - cos_o * cos_o;
-	float sin_i2 = eta * eta * sin_o2;
-	if (sin_i2 >= 1.0f) return 0.0f; //Total internal reflection
-
-	float cos_i = safe_sqrt(1.0f - sin_i2);
-	return cos_o > 0.0f ? -cos_i : cos_i;
-}
-
-inline float fresnel_value(float eta, float cos_o, float cos_i)
-{
-	if (almost_zero(cos_i)) return 1.0f; //Total internal reflection
-
-	cos_o = std::abs(cos_o);
-	cos_i = std::abs(cos_i);
-
-	float eta_r = eta;
-	float para0 = cos_o * eta_r;
-	float para1 = cos_i;
-	float perp0 = cos_o;
-	float perp1 = cos_i * eta_r;
-
-	float para = (para0 - para1) / (para0 + para1);
-	float perp = (perp0 - perp1) / (perp0 + perp1);
-	return (para * para + perp * perp) / 2.0f;
-}
-
-inline Vec3 fresnel_refract(float eta, float cos_i, Vec3 outgoing, Vec3 normal)
-{
-	float cos_o = dot(outgoing, normal);
-	return normalize(normal * (eta * cos_o + cos_i) - outgoing * eta);
-}
