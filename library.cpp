@@ -9,6 +9,7 @@
 #include <random>
 #include <thread>
 #include <atomic>
+#include <iostream>
 
 using Random = std::default_random_engine;
 thread_local std::unique_ptr<Random> thread_random;
@@ -44,7 +45,7 @@ static float intersect_sphere(const Ray& ray, Vec3 center, float radius, Vec3& n
 	float extend2 = mapped * mapped + radius2 - magnitude_squared(offset);
 	if (extend2 < 0.0f) return Infinity;
 
-	float extend = std::sqrt(extend2);
+	float extend = safe_sqrt(extend2);
 	float distance = mapped - extend;
 	if (distance < 0.0f) distance = mapped + extend;
 	if (distance < 0.0f) return Infinity;
@@ -70,29 +71,96 @@ static float intersect_plane(const Ray& ray, Vec3 normal, float offset)
 static float intersect_box(const Ray& ray, Vec3 min, Vec3 max, Vec3& normal)
 {
 	Vec3 direction_r = Vec3(1.0f) / ray.direction;
-	Vec3 lengths0 = (min - ray.origin) * direction_r;
-	Vec3 lengths1 = (max - ray.origin) * direction_r;
+	Vec3 lengths_min = (min - ray.origin) * direction_r;
+	Vec3 lengths_max = (max - ray.origin) * direction_r;
 
-	Vec3 lengths_min(std::max(lengths0.x, lengths1.x), std::max(lengths0.y, lengths1.y), std::max(lengths0.z, lengths1.z));
-	Vec3 lengths_max(std::min(lengths0.x, lengths1.x), std::min(lengths0.y, lengths1.y), std::min(lengths0.z, lengths1.z));
+	auto prepare = [](float& length_min, float& length_max, float& sign, float direction)
+	{
+		if (length_min < length_max) std::swap(length_min, length_max);
+		sign = direction < 0.0f ? 1.0f : -1.0f;
+	};
+
+	Vec3 signs;
+	prepare(lengths_min.x, lengths_max.x, signs.x, direction_r.x);
+	prepare(lengths_min.y, lengths_max.y, signs.y, direction_r.y);
+	prepare(lengths_min.z, lengths_max.z, signs.z, direction_r.z);
 
 	float near = lengths_max.x;
-	normal = Vec3(-std::copysign(1.0f, ray.direction.x), 0.0f, 0.0f);
+	float far = lengths_min.x;
+	Vec3 normal_near = Vec3(signs.x, 0.0f, 0.0f);
+	Vec3 normal_far = Vec3(-signs.x, 0.0f, 0.0f);
 
 	if (near < lengths_max.y)
 	{
 		near = lengths_max.y;
-		normal = Vec3(0.0f, -std::copysign(1.0f, ray.direction.y), 0.0f);
+		normal_near = Vec3(0.0f, signs.y, 0.0f);
+	}
+
+	if (far > lengths_min.y)
+	{
+		far = lengths_min.y;
+		normal_far = Vec3(0.0f, -signs.y, 0.0f);
 	}
 
 	if (near < lengths_max.z)
 	{
 		near = lengths_max.z;
-		normal = Vec3(0.0f, 0.0f, -std::copysign(1.0f, ray.direction.z));
+		normal_near = Vec3(0.0f, 0.0f, signs.z);
 	}
 
-	float far = std::min(lengths_min.x, std::min(lengths_min.y, lengths_min.z));
-	return (far >= near) && (far >= 0.0f) ? near : Infinity;
+	if (far > lengths_min.z)
+	{
+		far = lengths_min.z;
+		normal_far = Vec3(0.0f, 0.0f, -signs.z);
+	}
+
+	if ((far >= near) && (far >= 0.0f))
+	{
+		if (near >= 0.0f)
+		{
+			normal = normal_near;
+			return near;
+		}
+
+		normal = normal_far;
+		return far;
+	}
+
+	return Infinity;
+
+	//	Vec3 direction_r = Vec3(1.0f) / ray.direction;
+	//	Vec3 lengths_min = (min - ray.origin) * direction_r;
+	//	Vec3 lengths_max = (max - ray.origin) * direction_r;
+	//
+	//	auto prepare = [](float& length_min, float& length_max, float& sign, float direction)
+	//	{
+	//		if (length_min < length_max) std::swap(length_min, length_max);
+	//		sign = (length_max < 0.0f) ^ (direction < 0.0f) ? 1.0f : -1.0f;
+	//	};
+	//
+	//	Vec3 signs;
+	//	prepare(lengths_min.x, lengths_max.x, signs.x, direction_r.x);
+	//	prepare(lengths_min.y, lengths_max.y, signs.y, direction_r.y);
+	//	prepare(lengths_min.z, lengths_max.z, signs.z, direction_r.z);
+	//
+	//	float near = lengths_max.x;
+	//	normal = Vec3(signs.x, 0.0f, 0.0f);
+	//
+	//	if (near < lengths_max.y)
+	//	{
+	//		near = lengths_max.y;
+	//		normal = Vec3(0.0f, signs.y, 0.0f);
+	//	}
+	//
+	//	if (near < lengths_max.z)
+	//	{
+	//		near = lengths_max.z;
+	//		normal = Vec3(0.0f, 0.0f, signs.z);
+	//	}
+	//
+	//	float far = std::min(lengths_min.x, std::min(lengths_min.y, lengths_min.z));
+	//	if ((far >= near) && (far >= 0.0f)) return near < 0.0f ? far : near;
+	//	return Infinity;
 }
 
 bool Scene::intersect(const Ray& ray, float& distance, Vec3& normal, uint32_t& material) const

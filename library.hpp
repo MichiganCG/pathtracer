@@ -83,6 +83,12 @@ inline Vec3 reflect(Vec3 value, Vec3 normal) { return normal * (2.0f * dot(value
 inline bool almost_zero(float value, float epsilon = 8E-7f) { return -epsilon < value && value < epsilon; }
 
 /**
+ * Takes the square root of a number while avoiding negative numbers from rounding errors.
+ * @return The square root of value if value is positive, otherwise zero.
+ */
+inline float safe_sqrt(float value) { return value <= 0.0f ? 0.0f : std::sqrt(value); }
+
+/**
  * Normalizes a vector.
  * Returns the zero vector if the original vector is very close to zero.
  * @return A unit vector with the same direction as the original vector.
@@ -156,6 +162,11 @@ inline void make_same_side(Vec3 outgoing, Vec3 normal, Vec3& incident)
 inline float get_luminance(Color color) { return dot(color, { 0.212671f, 0.715160f, 0.072169f }); }
 
 /**
+ * @return Whether a color value is valid (i.e. not NaN).
+ */
+inline bool is_invalid(Color color) { return not std::isfinite(color.x + color.y + color.z); }
+
+/**
  * Executes an action in parallel, taking advantage of multiple threads.
  * @param begin The first index to execute (inclusive).
  * @param end One past the last index to execute (exclusive).
@@ -168,30 +179,24 @@ void parallel_for(uint32_t begin, uint32_t end, const std::function<void(uint32_
  */
 void write_image(const std::string& filename, uint32_t width, uint32_t height, const Color* colors);
 
-inline float fresnel_cos_i(float cos_o, float eta)
+inline float fresnel_cos_i(float eta, float cos_o)
 {
-	float sin_outgoing2 = 1.0f - cos_o * cos_o;
-	float sin_incident2 = eta * eta * sin_outgoing2;
-	if (sin_incident2 >= 1.0f) return 0.0f;
-	return std::sqrt(1.0f - sin_incident2);
-}
+	float sin_o2 = 1.0f - cos_o * cos_o;
+	float sin_i2 = eta * eta * sin_o2;
+	if (sin_i2 >= 1.0f) return 0.0f; //Total internal reflection
 
-inline bool fresnel_total_internal_reflection(float cos_i) { return almost_zero(cos_i); }
-
-inline Vec3 fresnel_refract(Vec3 outgoing, Vec3 normal, float eta, float cos_i)
-{
-	float cos_o = dot(outgoing, normal);
-	if (cos_o > 0.0f) cos_i = -cos_i;
-	return normalize(normal * (eta * cos_o + cos_i) - outgoing * eta);
+	float cos_i = safe_sqrt(1.0f - sin_i2);
+	return cos_o > 0.0f ? -cos_i : cos_i;
 }
 
 inline float fresnel_value(float eta, float cos_o, float cos_i)
 {
-	if (fresnel_total_internal_reflection(cos_i)) return 1.0f;
+	if (almost_zero(cos_i)) return 1.0f; //Total internal reflection
+
 	cos_o = std::abs(cos_o);
 	cos_i = std::abs(cos_i);
 
-	float eta_r = 1.0f / eta;
+	float eta_r = eta;
 	float para0 = cos_o * eta_r;
 	float para1 = cos_i;
 	float perp0 = cos_o;
@@ -200,4 +205,10 @@ inline float fresnel_value(float eta, float cos_o, float cos_i)
 	float para = (para0 - para1) / (para0 + para1);
 	float perp = (perp0 - perp1) / (perp0 + perp1);
 	return (para * para + perp * perp) / 2.0f;
+}
+
+inline Vec3 fresnel_refract(float eta, float cos_i, Vec3 outgoing, Vec3 normal)
+{
+	float cos_o = dot(outgoing, normal);
+	return normalize(normal * (eta * cos_o + cos_i) - outgoing * eta);
 }
