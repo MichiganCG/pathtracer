@@ -1,13 +1,13 @@
-#define COMPILE_REFERENCE
+//#define COMPILE_REFERENCE
 #ifdef COMPILE_REFERENCE
 
 #include "library.hpp"
 
 #include <vector>
 
-constexpr uint32_t ImageWidth = 512 * 4;
-constexpr uint32_t ImageHeight = 512 * 4;
-constexpr uint32_t SamplesPerPixel = 64 * 12;
+constexpr uint32_t ImageWidth = 512;
+constexpr uint32_t ImageHeight = 512 ;
+constexpr uint32_t SamplesPerPixel = 64;
 
 Scene make_scene()
 {
