@@ -5,19 +5,42 @@
 
 #include <vector>
 
-constexpr uint32_t ImageWidth = 1920 / 2;
-constexpr uint32_t ImageHeight = 1080 / 2;
-constexpr uint32_t SamplesPerPixel = 640;
+constexpr uint32_t ImageWidth = 512 * 4;
+constexpr uint32_t ImageHeight = 512 * 4;
+constexpr uint32_t SamplesPerPixel = 64 * 12;
 
 Scene make_scene()
 {
 	Scene scene;
 
-	scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f, 2);
-	scene.insert_sphere({ -2.0f, 1.0f, 3.0f }, 1.0f, 1);
-	scene.insert_sphere({ 0.0f, 3.0f, 3.0f }, 0.3f, 3);
-	scene.insert_plane({ 0.0f, 1.0f, 0.0f }, 0.0f);
-	scene.insert_box({ 2.0f, 1.1f, 3.0f }, Vec3(2.0f, 2.0f, 0.5f), 2);
+	//Default exterior scene
+	//		scene.insert_sphere({ 0.0f, 1.0f, 3.0f }, 1.0f, 2);
+	//		scene.insert_sphere({ -2.0f, 1.0f, 3.0f }, 1.0f, 1);
+	//		scene.insert_sphere({ 0.0f, 3.0f, 3.0f }, 0.3f, 3);
+	//		scene.insert_plane({ 0.0f, 1.0f, 0.0f }, 0.0f);
+	//
+	//		scene.insert_box({ 2.0f, 1.1f, 3.0f }, Vec3(2.0f, 2.0f, 0.1f), 2);
+	//		scene.insert_box({ 2.0f, 1.1f, 3.0f }, Vec3(2.0f, 0.1f, 2.0f), 2);
+
+	//Cornell box interior scene
+	scene.insert_plane({ 0.0f, 1.0f, 0.0f }, 0.0f, 0);
+	scene.insert_plane({ 0.0f, 0.0f, -1.0f }, 5.0f, 0);
+	scene.insert_plane({ 1.0f, 0.0f, 0.0f }, 5.0f, 1);
+	scene.insert_plane({ 0.0f, -1.0f, 0.0f }, 10.0f, 0);
+	scene.insert_plane({ -1.0f, 0.0f, 0.0f }, 5.0f, 2);
+
+	scene.insert_box({ 0.0f, 9.5f, 0.0f }, { 6.0f, 0.2f, 6.0f }, 3);
+	scene.insert_sphere({ -2.5f, 2.0f, 1.5f }, 2.0f, 4);
+	scene.insert_sphere({ 2.0f, 2.0f, -2.5f }, 2.0f, 5);
+	scene.insert_box({ 0.0f, 8.5f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 8.0f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 7.5f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 7.0f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 6.5f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 6.0f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 5.5f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 5.0f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
+	scene.insert_box({ 0.0f, 5.0f, 0.0f }, { 6.0f, 0.1f, 6.0f }, 5);
 
 	return scene;
 }
@@ -27,18 +50,16 @@ const Scene Scene = make_scene();
 Color bsdf_lambertian_reflection(Vec3 outgoing, Vec3 normal, Vec3& incident)
 {
 	//Uniform sampling
-	incident = random_on_sphere();
-	float uniform_hemisphere_pdf = 1.0f / Pi / 2.0f;
+	//	incident = random_on_sphere();
+	//	float pdf = 1.0f / Pi / 2.0f;
 
-	//Importance sampling based on cosine distribution (tried shortcut here, it doesn't actually work!!)
-	//	incident = normal + random_on_sphere();
-	//	float cosine_hemisphere_pdf = abs_dot(incident, normal) / Pi;
+	//Importance sampling based on cosine distribution
+	incident = random_cosine_hemisphere(normal);
+	float pdf = pdf_cosine_hemisphere(normal, incident);
+	if (almost_zero(pdf)) return Color();
 
 	make_same_side(outgoing, normal, incident);
 	float evaluated = 1.0f / Pi;
-	float pdf = uniform_hemisphere_pdf;
-
-	if (almost_zero(pdf)) return Color();
 	return Color(evaluated / pdf);
 }
 
@@ -86,15 +107,27 @@ Color bsdf_specular_fresnel(Vec3 outgoing, Vec3 normal, Vec3& incident, float et
 
 Color bsdf(uint32_t material, Vec3 outgoing, Vec3 normal, Vec3& incident)
 {
+	//Uniform sampling
+	//	switch (material)
+	//	{
+	//		case 0: return bsdf_lambertian_reflection(outgoing, normal, incident) * 0.5f;
+	//		case 1: return bsdf_specular_reflection(outgoing, normal, incident) * 0.8f;
+	//		case 2: return bsdf_specular_fresnel(outgoing, normal, incident, 1.0f / 1.5f) * 0.9f;
+	//		default: break;
+	//	}
+
+	//Cornell box interior scene
 	switch (material)
 	{
-		case 0: return bsdf_lambertian_reflection(outgoing, normal, incident) * 0.5f;
-		case 1: return bsdf_specular_reflection(outgoing, normal, incident) * 0.8f;
-		case 2: return bsdf_specular_fresnel(outgoing, normal, incident, 1.0f / 1.5f) * 0.9f;
+		case 0: return bsdf_lambertian_reflection(outgoing, normal, incident) * 0.8f;
+		case 1: return bsdf_lambertian_reflection(outgoing, normal, incident) * Color(0.9f, 0.1f, 0.2f);
+		case 2: return bsdf_lambertian_reflection(outgoing, normal, incident) * Color(0.1f, 0.9f, 0.2f);
+		case 4: return bsdf_specular_reflection(outgoing, normal, incident) * Color(0.2f, 0.3f, 0.9f);
+		case 5: return bsdf_specular_fresnel(outgoing, normal, incident, 1.0f / 1.5f) * 0.9f;
 		default: break;
 	}
 
-	return Color(0.0f);
+	return Color();
 }
 
 Color emit(uint32_t material)
@@ -105,7 +138,7 @@ Color emit(uint32_t material)
 		default: break;
 	}
 
-	return Color(0.0f);
+	return Color();
 }
 
 Color escape(Vec3 direction)
@@ -134,12 +167,51 @@ Color evaluate(const Ray& ray, uint32_t depth)
 	return emission + scatter * evaluate(new_ray, depth - 1) * lambertian;
 }
 
+Color evaluate_iterative(Ray ray, uint32_t depth)
+{
+	Color energy(1.0f);
+	Color result(0.0f);
+
+	for (uint32_t i = 0; i < depth; ++i)
+	{
+		float distance;
+		Vec3 normal;
+		uint32_t material;
+
+		if (not Scene.intersect(ray, distance, normal, material)) break;
+
+		Vec3 outgoing = -ray.direction;
+		Vec3 incident;
+
+		Color scatter = bsdf(material, outgoing, normal, incident);
+		Color emission = emit(material);
+
+		ray = bounce(ray, distance, incident);
+		float lambertian = abs_dot(normal, incident);
+
+		result = result + emission * energy;
+		energy = energy * scatter * lambertian;
+
+		if (almost_black(energy)) break;
+	}
+
+	if (almost_black(energy)) return result;
+	return result + energy * escape(ray.direction);
+}
+
 Color render_sample(float u, float v)
 {
 	Ray ray;
-	ray.origin = Vec3(0.0f, 1.5f, -3.0f);
+
+	//Default exterior scene
+	//	ray.origin = Vec3(0.0f, 1.5f, -3.0f);
+	//	ray.direction = normalize(Vec3(u, v, 1.0f));
+
+	//Cornell box interior scene
+	ray.origin = Vec3(0.0f, 5.0f, -15.0f);
 	ray.direction = normalize(Vec3(u, v, 1.0f));
-	return evaluate(ray, 128);
+
+	return evaluate_iterative(ray, 128);
 }
 
 Color render_pixel(uint32_t x, uint32_t y)

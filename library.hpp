@@ -101,6 +101,16 @@ inline Vec3 normalize(Vec3 value)
 }
 
 /**
+ * Computes the cross product between two vectors.
+ */
+inline Vec3 cross(Vec3 value, Vec3 other)
+{
+	return { (float)((double)value.y * other.z - (double)value.z * other.y),
+	         (float)((double)value.z * other.x - (double)value.x * other.z),
+	         (float)((double)value.x * other.y - (double)value.y * other.x) };
+}
+
+/**
  * @return A random floating point value between 0 (inclusive) and 1 (exclusive).
  */
 float random_float();
@@ -156,19 +166,24 @@ inline void make_same_side(Vec3 outgoing, Vec3 normal, Vec3& incident)
 }
 
 /**
+ * Randomly samples a direction on a hemisphere based on cosine weights.
+ * @param normal The normal that defines the hemisphere.
+ * @return The biased (i.e. importance sampled) sample.
+ */
+Vec3 random_cosine_hemisphere(Vec3 normal);
+
+/**
+ * Returns the probability density of a cosine weighted hemisphere sample.
+ * @see random_cosine_hemisphere
+ */
+inline float pdf_cosine_hemisphere(Vec3 normal, Vec3 incident) { return abs_dot(incident, normal) / Pi; }
+
+/**
  * Returns the cosine phi value of the incident direction for a fresnel surface.
  * @param eta The index of refraction of the fresnel.
  * @param cos_o The outgoing direction's cosine phi value.
  */
-inline float fresnel_cos_i(float eta, float cos_o)
-{
-	float sin_o2 = 1.0f - cos_o * cos_o;
-	float sin_i2 = eta * eta * sin_o2;
-	if (sin_i2 >= 1.0f) return 0.0f; //Total internal reflection
-
-	float cos_i = safe_sqrt(1.0f - sin_i2);
-	return cos_o > 0.0f ? -cos_i : cos_i;
-}
+float fresnel_cos_i(float eta, float cos_o);
 
 /**
  * Returns the fresnel value of a fresnel surface.
@@ -176,23 +191,7 @@ inline float fresnel_cos_i(float eta, float cos_o)
  * @param cos_o The outgoing direction's cosine phi value.
  * @param cos_i The incident direction's cosine phi value.
  */
-inline float fresnel_value(float eta, float cos_o, float cos_i)
-{
-	if (almost_zero(cos_i)) return 1.0f; //Total internal reflection
-
-	cos_o = std::abs(cos_o);
-	cos_i = std::abs(cos_i);
-
-	float eta_r = eta;
-	float para0 = cos_o * eta_r;
-	float para1 = cos_i;
-	float perp0 = cos_o;
-	float perp1 = cos_i * eta_r;
-
-	float para = (para0 - para1) / (para0 + para1);
-	float perp = (perp0 - perp1) / (perp0 + perp1);
-	return (para * para + perp * perp) / 2.0f;
-}
+float fresnel_value(float eta, float cos_o, float cos_i);
 
 /**
  * Returns the refracted incident direction given a fresnel surface and the outgoing direction.
@@ -201,17 +200,18 @@ inline float fresnel_value(float eta, float cos_o, float cos_i)
  * @param outgoing The outgoing direction.
  * @param normal The normal of the surface.
  */
-inline Vec3 fresnel_refract(float eta, float cos_i, Vec3 outgoing, Vec3 normal)
-{
-	float cos_o = dot(outgoing, normal);
-	return normalize(normal * (eta * cos_o + cos_i) - outgoing * eta);
-}
+Vec3 fresnel_refract(float eta, float cos_i, Vec3 outgoing, Vec3 normal);
 
 /**
  * Returns the luminance value of a color.
  * This can be thought of as the visually perceived brightness.
  */
 inline float get_luminance(Color color) { return dot(color, { 0.212671f, 0.715160f, 0.072169f }); }
+
+/**
+ * Returns whether a color is almost black.
+ */
+inline bool almost_black(Color color) { return almost_zero(get_luminance(color)); }
 
 /**
  * @return Whether a color value is valid (i.e. not NaN).
