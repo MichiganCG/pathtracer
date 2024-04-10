@@ -5,9 +5,9 @@
 
 #include <vector>
 
-constexpr uint32_t ImageWidth = 512;
-constexpr uint32_t ImageHeight = 512;
-constexpr uint32_t SamplesPerPixel = 64;
+constexpr uint32_t ImageWidth = 512 * 4;
+constexpr uint32_t ImageHeight = 512 * 4;
+constexpr uint32_t SamplesPerPixel = 64 * 16;
 constexpr uint32_t MaxBounces = 128;
 
 Scene make_scene()
